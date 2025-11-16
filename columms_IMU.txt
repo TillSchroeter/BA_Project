@@ -1,0 +1,44 @@
+Linke Seite (LT)
+    LT Hip Flexion (deg) (Hüftbeugung)
+
+    LT Hip Abduction (deg) (Hüftabduktion)
+
+    LT Hip Rotation Ext (deg) (Hüftaußenrotation)
+
+    LT Knee Abduction (deg) (Knieabduktion)
+
+    LT Knee Rotation Ext (deg) (Knieaußenrotation)
+
+    LT Knee Flexion (deg) (Kniebeugung)
+
+    Noraxon MyoMotion-Joints-Knee LT-Extension (deg) (Kniestreckung)
+
+    LT Ankle Dorsiflexion (deg) (Dorsalextension des Knöchels)
+
+    LT Ankle Abduction (deg) (Knöchelabduktion)
+
+    LT Ankle Inversion (deg) (Knöchelinversion)
+
+
+
+
+Rechte Seite (RT)
+    RT Hip Flexion (deg) (Hüftbeugung)
+
+    RT Hip Abduction (deg) (Hüftabduktion)
+
+    RT Hip Rotation Ext (deg) (Hüftaußenrotation)
+
+    RT Knee Abduction (deg) (Knieabduktion)
+
+    RT Knee Rotation Ext (deg) (Knieaußenrotation)
+
+    RT Knee Flexion (deg) (Kniebeugung)
+
+    Noraxon MyoMotion-Joints-Knee RT-Extension (deg) (Kniestreckung)
+
+    RT Ankle Dorsiflexion (deg) (Dorsalextension des Knöchels)
+
+    RT Ankle Abduction (deg) (Knöchelabduktion)
+
+    RT Ankle Inversion (deg) (Knöchelinversion)
