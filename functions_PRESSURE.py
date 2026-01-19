@@ -5,68 +5,66 @@ import numpy as np
 from scipy.signal import butter, filtfilt, find_peaks
 
 
-def identify_jumps(df, height, distance_sec=0.3, fs=2000, buffer=0.5):
+def identify_jumps(df, flight_threshold=50, min_flight_sec=0.2, buffer=0.75):
     """
-    Identifiziert Sprünge basierend auf Paaren von Kraft-Peaks und fügt
-    einen zeitlichen Puffer davor und danach hinzu.
+    Identifiziert Sprünge rein über das Unterschreiten eines Kraft-Schwellenwerts.
     
     Parameters:
     -----------
-    buffer : float
-        Zeit in Sekunden, die vor dem Absprung und nach der Landung 
-        zusätzlich eingeschlossen wird (Default: 0.5s).
+    flight_threshold : float
+        Kraftwert (N), unter dem eine Flugphase erkannt wird (Default: 50N).
+    min_flight_sec : float
+        Mindestdauer in der Luft, um als Sprung zu gelten (verhindert Fehltrigger).
     """
-    # 1. Kraft berechnen
-    total_force = df['LT Force (N)'] + df['RT Force (N)']
+    total_force = (df['LT Force (N)'] + df['RT Force (N)']).values
     time = df['time'].values
     max_time = time[-1]
     
-    # # 2. Filterung (wie bewährt)
-    # nyq = 0.5 * fs
-    # b, a = butter(4, 20 / nyq, btype='low')
-    # filtered_f = filtfilt(b, a, total_force)
-
-    # 3. Peak Suche
-    peak_indices, _ = find_peaks(total_force, height=height, distance=int(distance_sec * fs))
+    # 1. Erstelle eine Maske: True wo wir "in der Luft" sind
+    in_air = total_force < flight_threshold
     
+    # 2. Finde die Zeitpunkte, an denen sich der Status ändert (0 auf 1 oder 1 auf 0)
+    diff = np.diff(in_air.astype(int))
+    takeoff_indices = np.where(diff == 1)[0]
+    landing_indices = np.where(diff == -1)[0]
+    
+    # Sicherstellen, dass wir mit einem Take-off starten und einer Landung enden
+    if len(takeoff_indices) > 0 and len(landing_indices) > 0:
+        if landing_indices[0] < takeoff_indices[0]:
+            landing_indices = landing_indices[1:]
+        takeoff_indices = takeoff_indices[:len(landing_indices)]
+
     jumps_list = []
     
-    # 4. Paar-Logik mit Buffer
-    for i in range(0, len(peak_indices) - 1, 2):
-        idx_start_peak = peak_indices[i]
-        idx_end_peak = peak_indices[i+1]
+    # 3. Durch die gefundenen Phasen iterieren
+    for i in range(len(takeoff_indices)):
+        idx_off = takeoff_indices[i]
+        idx_on = landing_indices[i]
         
-        # Die reinen Peak-zu-Peak Zeiten (fast wie Absprung bis Landung)
-        t_absprung_peak = time[idx_start_peak]
-        t_landung_peak = time[idx_end_peak]
+        t_off = time[idx_off]
+        t_on = time[idx_on]
+        flug_dauer = t_on - t_off
         
-        # Die reine Dauer zwischen den Kraftspitzen
-        reine_peak_dauer = t_landung_peak - t_absprung_peak
-        
-        # Das Analyse-Fenster für das EMG (inkl. Puffer)
-        start_with_buffer = max(0, t_absprung_peak - buffer)
-        end_with_buffer = min(max_time, t_landung_peak + buffer)
-        
-        # Die Dauer des gesamten "Schnippels", den du ausschneidest
-        fenster_dauer = end_with_buffer - start_with_buffer
-        
-        # Dictionary mit klarer Trennung
-        jump_dict = {
-            'sprung nr.': len(jumps_list) + 1,
-            'start_ana': round(start_with_buffer, 4), # Start für EMG-Ausschnitt
-            'end_ana': round(end_with_buffer, 4),     # Ende für EMG-Ausschnitt
-            'ana_dauer': round(fenster_dauer, 4),     # Gesamtdauer des Ausschnitts
-            'peak_to_peak_dauer': round(reine_peak_dauer, 4), # Wichtig für Bewegungsvergleich
-            't_absprung': round(t_absprung_peak, 4),
-            't_landung': round(t_landung_peak, 4)
-            }   
-        
-        jumps_list.append(jump_dict)
-        
+        # Nur Sprünge nehmen, die eine plausible Flugzeit haben
+        if flug_dauer > min_flight_sec:
+            start_with_buffer = max(0, t_off - buffer)
+            end_with_buffer = min(max_time, t_on + buffer)
+            
+            jump_dict = {
+                'sprung nr.': len(jumps_list) + 1,
+                'start_ana': round(start_with_buffer, 4),
+                'end_ana': round(end_with_buffer, 4),
+                'ana_dauer': round(end_with_buffer - start_with_buffer, 4),
+                'peak_to_peak_dauer': round(flug_dauer, 4), # Hier: Echte Flugzeit
+                't_absprung': round(t_off, 4),
+                't_landung': round(t_on, 4)
+            }
+            jumps_list.append(jump_dict)
+            
     return jumps_list
 
 
-def visualize_jumps(df, jumps_list):
+def visualize_jumps(df, jumps_list, participant, measurement):
     # Kraft berechnen
     total_force = df['LT Force (N)'] + df['RT Force (N)']
     time = df['time'].values
@@ -109,11 +107,12 @@ def visualize_jumps(df, jumps_list):
         plt.text(text_pos_x, max(total_force) * 0.78, f"{j['peak_to_peak_dauer']:.2f}s", 
                  horizontalalignment='center', fontsize=9, color='gray')
 
-    plt.title(f"Identifizierte Sprungzyklen inkl. Pre- & Post-Buffer ({len(jumps_list)} Sprünge)")
+    plt.title(f"Identifizierte Sprungzyklen inkl. Pre- & Post-Buffer ({len(jumps_list)} Sprünge) - {participant} - {measurement}")
     plt.xlabel("Zeit (s)")
     plt.ylabel("Gesamtkraft (N)")
-    
+    plt.title(f"Identifizierte Sprungzyklen inkl. Pre- & Post-Buffer ({len(jumps_list)} Sprünge) - {participant} - {measurement}")
     plt.legend(loc='upper right')
     plt.grid(True, alpha=0.2)
     plt.tight_layout()
+    plt.savefig(f'Pictures_Test/Sprungzüglen Kraft/{participant}_{measurement}_jump_.png', dpi=300)
     plt.show()

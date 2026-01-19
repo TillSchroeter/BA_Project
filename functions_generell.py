@@ -55,75 +55,68 @@ def load_csvs(folder_path):
             dfs.get('VR_2'), dfs.get('MVC_Beine'), dfs.get('MVC_Hals'))
 
 
-def detect_jump_phases(df, force_threshold=50, min_flight_time=0.1, buffer_time=0.5):
+### Funktion zum Zeitnormieren 
+def time_normalize_jumps(df, participant_name, measurement_type, 
+                             jumps_csv_folder='jump_analysis_results', 
+                             normalize_points=100):
     """
-    Erkennt Sprungphasen in einem DataFrame anhand der Drucksohlen-Kraftdaten.
-    Berechnet die Gesamtkraft (links + rechts) und identifiziert Absprung und Landung.
+    Normiert nur die Sprünge, die zum angegebenen measurement_type passen.
     
     Parameters:
     -----------
-    df : pd.DataFrame
-        DataFrame mit Kraftdaten ('LT Force (N)', 'RT Force (N)', 'time')
-    force_threshold : float, optional
-        Schwellenwert für Bodenkontakt in Newton (default: 50)
-    min_flight_time : float, optional
-        Minimale Flugzeit in Sekunden (default: 0.1)
-    buffer_time : float, optional
-        Zusätzliche Zeit vor und nach jedem Sprung in Sekunden (default: 0.5)
-    
-    Returns:
-    --------
-    list of dict
-        Liste mit Dictionaries für jeden Sprung:
-        [{'jump_nr': 1, 'start_time': t1, 'end_time': t2, 
-          'takeoff_time': t_takeoff, 'landing_time': t_landing}, ...]
+    measurement_type : str
+        Der Typ der Messung, der gerade verarbeitet wird (z.B. 'REAL_1', 'VR_2')
     """
     
-    # Berechne Gesamtkraft (links + rechts)
-    total_force = df['LT Force (N)'] + df['RT Force (N)']
-    time = df['time'].values
+    # Pfad zur CSV
+    jumps_csv_path = os.path.join(jumps_csv_folder, f'{participant_name}_jumps.csv')
     
-    # Identifiziere Bodenkontakt (Kraft über Schwellenwert)
-    ground_contact = total_force > force_threshold
+    if not os.path.exists(jumps_csv_path):
+        raise FileNotFoundError(f"Jumps CSV nicht gefunden: {jumps_csv_path}")
     
-    # Finde Übergänge (Absprung und Landung)
-    contact_diff = np.diff(ground_contact.astype(int))
+    # 1. Gesamte CSV laden
+    jumps_info = pd.read_csv(jumps_csv_path)
     
-    # Absprung: Übergang von 1 zu 0 (contact_diff == -1)
-    takeoff_indices = np.where(contact_diff == -1)[0] + 1
+    # 2. CSV filtern: Nur die Zeilen behalten, wo die Spalte 'messung' dem Typ entspricht
+    # Das verhindert die Fehlermeldungen für die anderen 18 Sprünge
+    relevant_jumps = jumps_info[jumps_info['messung'] == measurement_type]
     
-    # Landung: Übergang von 0 zu 1 (contact_diff == 1)
-    landing_indices = np.where(contact_diff == 1)[0] + 1
+    normalized_jumps = {}
     
-    # Paare von Absprung und Landung bilden
-    jumps = []
-    
-    for i, takeoff_idx in enumerate(takeoff_indices):
-        # Finde die nächste Landung nach diesem Absprung
-        landing_candidates = landing_indices[landing_indices > takeoff_idx]
+    # 3. Nur die relevanten 6 Sprünge durchlaufen
+    for idx, row in relevant_jumps.iterrows():
+        start_time = row['start_ana']
+        # ACHTUNG: Hier entscheidest du, ob bis 'end_ana' (ganzer Sprung) 
+        # oder 't_absprung' (nur Vorbereitung) normiert wird:
+        end_time = row['t_absprung'] 
         
-        if len(landing_candidates) > 0:
-            landing_idx = landing_candidates[0]
+        jump_nr = int(row['sprung nr.'])
+        
+        # Extrahiere Daten
+        mask = (df['time'] >= start_time) & (df['time'] <= end_time)
+        jump_data = df[mask].reset_index(drop=True)
+        
+        if len(jump_data) < 2:
+            continue
             
-            # Prüfe, ob die Flugzeit lang genug ist
-            flight_time = time[landing_idx] - time[takeoff_idx]
-            
-            if flight_time >= min_flight_time:
-                # Berechne Start- und Endzeit mit Buffer
-                takeoff_time = time[takeoff_idx]
-                landing_time = time[landing_idx]
-                
-                start_time = max(0, takeoff_time - buffer_time)
-                end_time = min(time[-1], landing_time + buffer_time)
-                
-                jumps.append({
-                    'jump_nr': len(jumps) + 1,
-                    'start_time': start_time,
-                    'end_time': end_time,
-                    'takeoff_time': takeoff_time,
-                    'landing_time': landing_time,
-                    'flight_time': flight_time
-                })
+        # Interpolations-Logik (bleibt gleich)
+        original_indices = np.linspace(0, len(jump_data) - 1, len(jump_data))
+        new_indices = np.linspace(0, len(jump_data) - 1, normalize_points)
+        
+        normalized_data = {}
+        for col in jump_data.columns:
+            if pd.api.types.is_numeric_dtype(jump_data[col]):
+                normalized_data[col] = np.interp(new_indices, original_indices, jump_data[col].values)
+            else:
+                normalized_data[col] = [jump_data[col].iloc[0]] * normalize_points
+        
+        normalized_data['time_normalized'] = np.linspace(0, 1, normalize_points)
+        normalized_df = pd.DataFrame(normalized_data)
+        
+        # Key generieren: z.B. "REAL_1_jump_1"
+        key = f"{measurement_type}_jump_{jump_nr}"
+        normalized_jumps[key] = normalized_df
     
-    return jumps
+    return normalized_jumps
+
 
