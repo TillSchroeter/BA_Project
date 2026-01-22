@@ -55,6 +55,7 @@ def load_csvs(folder_path):
             dfs.get('VR_2'), dfs.get('MVC_Beine'), dfs.get('MVC_Hals'))
 
 
+
 ### Funktion zum Zeitnormieren 
 def time_normalize_jumps(df, participant_name, measurement_type, 
                              jumps_csv_folder='jump_analysis_results', 
