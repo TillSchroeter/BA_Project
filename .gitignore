@@ -206,5 +206,9 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
-*.csv
+# Ignoriere nur CSV-Dateien in diesem spezifischen Ordner
+data_final/**/*.csv
+data_test/**/*.csv
+data_processed_pctMVC/**/*.csv
+
 
